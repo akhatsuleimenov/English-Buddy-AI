@@ -25,8 +25,13 @@ def generate_pdf_content(analysis_data):
         analysis_data (dict): Dictionary containing user analysis data
         pdf_path (str): Path where PDF should be saved
     """
+    logger.info("Starting PDF generation")
+    logger.debug(f"Generating PDF for user: {analysis_data['user_info']['username']}")
+
     os.makedirs("reports", exist_ok=True)
     pdf_path = f"reports/{analysis_data['user_info']['username']}_full_report.pdf"
+
+    logger.debug("Creating PDF document template")
     doc = SimpleDocTemplate(
         pdf_path,
         pagesize=letter,
@@ -35,15 +40,21 @@ def generate_pdf_content(analysis_data):
         topMargin=50,
         bottomMargin=50,
     )
-    font_dir = "fonts"
-    pdfmetrics.registerFont(
-        TTFont("DejaVuSans", os.path.join(font_dir, "DejaVuSans.ttf"))
-    )
-    pdfmetrics.registerFont(
-        TTFont("DejaVuSans-Bold", os.path.join(font_dir, "DejaVuSans-Bold.ttf"))
-    )
 
-    # Define styles with DejaVuSans fonts
+    logger.debug("Registering fonts")
+    font_dir = "fonts"
+    try:
+        pdfmetrics.registerFont(
+            TTFont("DejaVuSans", os.path.join(font_dir, "DejaVuSans.ttf"))
+        )
+        pdfmetrics.registerFont(
+            TTFont("DejaVuSans-Bold", os.path.join(font_dir, "DejaVuSans-Bold.ttf"))
+        )
+    except Exception as e:
+        logger.error(f"Failed to register fonts: {str(e)}")
+        raise
+
+    logger.debug("Setting up document styles")
     styles = getSampleStyleSheet()
     styles["Title"].fontName = "DejaVuSans-Bold"
     styles["Title"].fontSize = 24
@@ -58,10 +69,10 @@ def generate_pdf_content(analysis_data):
 
     story = []
 
-    # Title page
+    logger.debug("Building title page")
     story.append(Paragraph("Анализ владения английским языком", styles["Title"]))
 
-    # Basic info
+    logger.debug("Adding user information")
     story.append(Paragraph("Информация о пользователе:", styles["Heading1"]))
     story.append(
         Paragraph(f"Имя: {analysis_data['user_info']['name']}", styles["Normal"])
@@ -75,20 +86,19 @@ def generate_pdf_content(analysis_data):
 
     story.append(PageBreak())
 
-    # Study Plan
+    logger.debug("Adding study plan section")
     story.append(Paragraph("План обучения", styles["Title"]))
     study_plan = analysis_data["study_plan"]
 
-    # Introduction
     story.append(Paragraph("Введение", styles["Heading1"]))
     story.append(Paragraph(study_plan["introduction"]["summary"], styles["Normal"]))
 
-    # Key areas for improvement
+    logger.debug("Adding improvement areas")
     story.append(Paragraph("Ключевые области для улучшения:", styles["Heading1"]))
     for area in study_plan["introduction"]["key_areas_for_improvement"]:
         story.append(Paragraph(f"• {area}", styles["Bullet"]))
 
-    # Detailed improvement plans
+    logger.debug("Adding detailed improvement plans")
     improvement_plans = {
         "1 месяц": study_plan["detailed_improvement_plan"]["1_month_plan"],
         "3 месяца": study_plan["detailed_improvement_plan"]["3_month_plan"],
@@ -97,6 +107,7 @@ def generate_pdf_content(analysis_data):
     }
 
     for period, plan in improvement_plans.items():
+        logger.debug(f"Adding plan for period: {period}")
         story.append(Paragraph(f"План обучения на {period}:", styles["Heading1"]))
         story.append(Paragraph("Цели:", styles["Heading2"]))
         for goal in plan["goals"]:
@@ -107,7 +118,7 @@ def generate_pdf_content(analysis_data):
             story.append(Paragraph(f"• {action}", styles["Bullet"]))
         story.append(PageBreak())
 
-    # Action Schedule
+    logger.debug("Adding action schedule")
     story.append(Paragraph("График Занятий", styles["Title"]))
 
     schedules = {
@@ -117,21 +128,24 @@ def generate_pdf_content(analysis_data):
     }
 
     for schedule_type, activities in schedules.items():
+        logger.debug(f"Adding schedule type: {schedule_type}")
         story.append(Paragraph(schedule_type, styles["Heading1"]))
         for activity in activities:
             story.append(Paragraph(f"• {activity}", styles["Bullet"]))
 
-    # Resources
+    logger.debug("Adding resources section")
     story.append(PageBreak())
     story.append(Paragraph("Рекомендуемые материалы", styles["Title"]))
 
     for resource_type, items in study_plan["resources"].items():
+        logger.debug(f"Adding resource type: {resource_type}")
         story.append(Paragraph(resource_type.capitalize(), styles["Heading1"]))
         for item in items:
             story.append(Paragraph(f"• {item}", styles["Bullet"]))
 
     story.append(PageBreak())
 
+    logger.debug("Adding analysis sections")
     sections = [
         (
             "Оценка словарного запаса",
@@ -159,24 +173,31 @@ def generate_pdf_content(analysis_data):
             analysis_data["audio"]["feedback"],
         ),
     ]
-    logger.debug(f"Sections: {sections}")
+
     for title, evaluation, feedback in sections:
+        logger.debug(f"Adding analysis section: {title}")
         add_analysis_section(story, title, evaluation, feedback, styles)
-    logger.debug("PDF build")
-    doc.build(story)
-    logger.debug("PDF build end")
+
+    logger.info("Building final PDF document")
+    try:
+        doc.build(story)
+        logger.info("PDF generation completed successfully")
+    except Exception as e:
+        logger.error(f"Failed to build PDF: {str(e)}")
+        raise
+
     return pdf_path
 
 
 def add_analysis_section(story, title, evaluation, feedback, styles):
     """Adds a section of analysis to the PDF report."""
-    logger.debug(f"Title: {title}")
+    logger.debug(f"Adding analysis section: {title}")
     story.append(Paragraph(title, styles["Heading2"]))
     story.append(Spacer(1, 12))
 
-    # Helper function to safely create bullet lists
     def create_bullet_list(items, styles):
         if not items or not isinstance(items, (list, tuple)) or len(items) == 0:
+            logger.warning(f"Empty or invalid bullet list items for section: {title}")
             return None
         return ListFlowable(
             [ListItem(Paragraph(str(item), styles["Normal"])) for item in items],
@@ -186,7 +207,7 @@ def add_analysis_section(story, title, evaluation, feedback, styles):
             spaceAfter=6,
         )
 
-    # Add evaluation scores (with null checks)
+    logger.debug("Processing evaluation scores")
     evaluation = evaluation or {}
     for criteria, details in evaluation.items():
         if criteria != "overall" and details and isinstance(details, dict):
@@ -201,7 +222,7 @@ def add_analysis_section(story, title, evaluation, feedback, styles):
             story.append(Paragraph(f"Анализ: {justification}", styles["Normal"]))
             story.append(Spacer(1, 12))
 
-    # Add overall evaluation (with null checks)
+    logger.debug("Adding overall evaluation")
     overall = evaluation.get("overall", {})
     if overall and isinstance(overall, dict):
         story.append(Paragraph("Общая оценка", styles["Heading3"]))
@@ -210,32 +231,32 @@ def add_analysis_section(story, title, evaluation, feedback, styles):
         story.append(Paragraph(f"Общий балл: {score}/{max_score}", styles["Normal"]))
         story.append(Spacer(1, 8))
 
-        # Handle strengths
         strengths = overall.get("strengths", [])
         if strengths and isinstance(strengths, (list, tuple)) and len(strengths) > 0:
+            logger.debug("Adding strengths section")
             story.append(Paragraph("Сильные стороны:", styles["Heading4"]))
             bullet_list = create_bullet_list(strengths, styles)
             if bullet_list:
                 story.append(bullet_list)
                 story.append(Spacer(1, 8))
 
-        # Handle areas for improvement
         areas = overall.get("areas_for_improvement", [])
         if areas and isinstance(areas, (list, tuple)) and len(areas) > 0:
+            logger.debug("Adding areas for improvement section")
             story.append(Paragraph("Области для улучшения:", styles["Heading4"]))
             bullet_list = create_bullet_list(areas, styles)
             if bullet_list:
                 story.append(bullet_list)
                 story.append(Spacer(1, 8))
 
-        # Handle summary
         summary = overall.get("summary")
         if summary and isinstance(summary, str) and summary.strip():
+            logger.debug("Adding summary section")
             story.append(Paragraph("Итог:", styles["Heading4"]))
             story.append(Paragraph(str(summary), styles["Normal"]))
             story.append(Spacer(1, 12))
 
-    # Add feedback sections (with null checks)
+    logger.debug("Adding feedback sections")
     story.append(Paragraph(f"Детальный анализ {title.lower()}", styles["Heading3"]))
     story.append(Spacer(1, 8))
 
@@ -250,6 +271,7 @@ def add_analysis_section(story, title, evaluation, feedback, styles):
     for section_title, section_key in sections:
         items = feedback.get(section_key, [])
         if items and isinstance(items, (list, tuple)) and len(items) > 0:
+            logger.debug(f"Adding feedback section: {section_title}")
             story.append(Paragraph(section_title, styles["Heading4"]))
             bullet_list = create_bullet_list(items, styles)
             if bullet_list:

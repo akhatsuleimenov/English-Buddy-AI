@@ -62,10 +62,10 @@ async def create_payment_button(username: str, bot_username: str):
                 "price_data": {
                     "currency": "usd",
                     "product_data": {
-                        "name": "Full English Assessment Report",
-                        "description": "Comprehensive English language assessment report with personalized study plan",
+                        "name": "Полная диагностика",
+                        "description": "Полная диагностика английского языка с персональным планом обучения",
                     },
-                    "unit_amount": 1999,  # $19.99 in cents
+                    "unit_amount": 999,  # $9.99 in cents
                 },
                 "quantity": 1,
             }
@@ -81,7 +81,7 @@ async def create_payment_button(username: str, bot_username: str):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Получить полный отчет за $19.99", url=session.url
+                    text="Получить полный отчет за $9.99", url=session.url
                 )
             ]
         ]
@@ -371,6 +371,7 @@ def setup_router(
 
     # Set Stripe API key
     stripe.api_key = stripe_secret_key
+    logger.info(f"Stripe API key set: {stripe_secret_key}")
 
     @router.message(
         lambda message: message.text and message.text.startswith("/start payment_")
@@ -405,12 +406,24 @@ def setup_router(
     async def send_welcome(message: Message):
         username = message.from_user.username
         logger.info(f"User {username} started the bot")
-        await message.answer(
-            "Привет! Я бот English Buddy AI. Давайте оценим ваши навыки английского языка и создадим персонализированный план обучения."
-        )
-        await message.answer(BASIC_QUESTIONS[0])
-        db_manager.update_current_question(username, 1)
-        logger.debug(f"Initial question sent to user {username}")
+
+        # Check if user has already started the questionnaire
+        current_question = db_manager.get_current_question(username)
+
+        if current_question > 0:
+            logger.info(
+                f"User {username} resuming questionnaire from question {current_question}"
+            )
+            # Resume from where they left off
+            await handle_user_interaction(message)
+        else:
+            # Start fresh
+            await message.answer(
+                "Привет! Я бот English Buddy AI. Давайте оценим ваши навыки английского языка и создадим персонализированный пл��н обучения."
+            )
+            await message.answer(BASIC_QUESTIONS[0])
+            db_manager.update_current_question(username, 1)
+            logger.debug(f"Initial question sent to user {username}")
 
     async def mini_report(message: Message):
         username = message.from_user.username
@@ -423,11 +436,11 @@ def setup_router(
             mini_report_assistant_manager,
             message.from_user.username,
             bot_username,
-            message,
             message.date.timestamp(),
         )
 
         await message.answer(report_text, reply_markup=payment_button)
+        db_manager.mark_mini_report_sent(username)  # Mark mini report as sent
 
     @router.message()
     async def handle_user_interaction(message: Message):
@@ -455,6 +468,15 @@ def setup_router(
             await message.reply(
                 "Пожалуйста, используйте команду /start, чтобы начать опрос."
             )
+            return
+
+        # Add check for choice questions phase
+        is_choice_question = current_question > len(
+            BASIC_QUESTIONS
+        ) and current_question <= len(BASIC_QUESTIONS) + len(BASIC_QUESTIONS_CHOICES)
+
+        if is_choice_question:
+            await message.reply("Пожалуйста, выберите один из предложенных вариантов.")
             return
 
         handlers = {
@@ -533,7 +555,7 @@ def setup_router(
 
         if essay_q_num == len(ESSAY_QUESTIONS) - 1:
             await message.answer(
-                "Пожалуйста, запишите аудио ответ на следующий вопрос:\n\n"
+                "Пожалуйста, запишите аудио ответ на английском языке на следующий вопрос:\n\n"
                 + AUDIO_QUESTIONS[0]
             )
         else:
@@ -572,7 +594,7 @@ def setup_router(
             await mini_report(message)
         else:
             await message.answer(
-                "Пожалуйста, запишите аудио ответ на следующий вопрос:\n\n"
+                "Пожалуйста, запишите аудио ответ на английском языке на следующий вопрос:\n\n"
                 + AUDIO_QUESTIONS[audio_q_num + 1]
             )
 
@@ -580,6 +602,12 @@ def setup_router(
         message: Message, username: str, current_question: int
     ):
         if not message.text or not message.text.startswith("/"):
+            # Check if mini report has been sent
+            has_mini_report = db_manager.check_mini_report_sent(username)
+            if not has_mini_report:
+                await mini_report(message)
+                return
+
             # Check if user has already paid
             has_paid = db_manager.check_payment_status(username)
             if has_paid:

@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from bot.handlers import setup_router
 from database.db_manager import DatabaseManager
+from gemini_system_prompt import GEMINI_SYSTEM_INSTRUCTION
 from openai_api.assistant_manager import AssistantManager
 
 if os.path.exists(".env"):
@@ -33,8 +34,8 @@ MINI_REPORT_AGENT_ID = os.getenv("MINI_REPORT_AGENT_ID")
 STUDY_PLAN_AGENT_ID = os.getenv("STUDY_PLAN_AGENT_ID")
 
 # Database configuration
-DATABASE_URL = "database.db"
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
+STRIPE_SECRET_KEY = os.getenv("STRIPE_LIVE_SECRET_KEY")
 
 # Initialize assistant managers
 vocabulary_assistant_manager = AssistantManager(
@@ -67,7 +68,7 @@ audio_model_genai = genai.GenerativeModel(
         "max_output_tokens": 8192,
         "response_mime_type": "text/plain",
     },
-    system_instruction="...",  # System instruction remains unchanged
+    system_instruction=GEMINI_SYSTEM_INSTRUCTION,
 )
 
 # Initialize database manager
