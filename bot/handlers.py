@@ -418,7 +418,7 @@ def setup_router(
         else:
             # Start fresh
             await message.answer(
-                "Привет! Я бот English Buddy AI. Давайте оценим ваши навыки английского языка и создадим персонализированный пл��н обучения."
+                "Привет! Я бот English Buddy AI. Давайте оценим ваши навыки английского языка и создадим персонализированный план обучения."
             )
             await message.answer(BASIC_QUESTIONS[0])
             db_manager.update_current_question(username, 1)
