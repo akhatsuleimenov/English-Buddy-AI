@@ -2,17 +2,11 @@ import time
 
 from openai import OpenAI
 
-from config.logger_config import logger
-
-# Configure structured logging
-logger = logger.getChild("assistant_manager")
-
 
 class AssistantManager:
     def __init__(self, api_key, assistant_id):
         self.client = OpenAI(api_key=api_key)
         self.assistant = self.client.beta.assistants.retrieve(assistant_id)
-        logger.info(f"Initialized AssistantManager with assistant ID: {assistant_id}")
 
     def create_thread(self):
         return self.client.beta.threads.create()
@@ -33,41 +27,28 @@ class AssistantManager:
                 run = self.client.beta.threads.runs.create(
                     thread_id=thread_id, assistant_id=self.assistant.id
                 )
-                logger.info(f"Started run in thread {thread_id}")
 
                 while run.status == "queued" or run.status == "in_progress":
                     time.sleep(1)
                     run = self.client.beta.threads.runs.retrieve(
                         thread_id=thread_id, run_id=run.id
                     )
-                    logger.debug(f"Run status: {run.status}")
 
                 if run.status == "failed":
                     attempt += 1
                     error_msg = (
                         f"Run failed in thread {thread_id}: {run.last_error.message}"
                     )
-                    logger.warning(f"Attempt {attempt}/{max_retries}: {error_msg}")
                     if attempt >= max_retries:
-                        logger.error(
-                            f"All retry attempts failed for thread {thread_id}"
-                        )
                         raise Exception(error_msg)
                     time.sleep(2**attempt)  # Exponential backoff
                     continue
 
-                logger.info(
-                    f"Completed run in thread {thread_id} with status: {run.status}"
-                )
                 return  # Success - exit the retry loop
 
             except Exception as e:
                 attempt += 1
-                logger.warning(
-                    f"Attempt {attempt}/{max_retries}: Error creating run: {str(e)}"
-                )
                 if attempt >= max_retries:
-                    logger.error(f"All retry attempts failed for thread {thread_id}")
                     raise
                 time.sleep(2**attempt)  # Exponential backoff
 
@@ -76,23 +57,16 @@ class AssistantManager:
         return resp.data[0].content[0].text.value
 
     def transcribe_audio(self, audio_file_path):
-        logger.info(f"Starting audio transcription for file: {audio_file_path}")
         with open(audio_file_path, "rb") as audio_file:
             transcription = self.client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
             ).text
-        logger.info("Audio transcription completed successfully")
         return transcription
 
     def handle_message(self, responses):
-        logger.debug(f"Formatted message: {responses}")
         thread = self.create_thread()
-        logger.info(f"Created new conversation thread: {thread.id}")
-
         self.create_thread_message(thread.id, responses)
         self.create_run(thread.id)
-
         answer = self.get_answer(thread.id)
-        logger.info(f"Successfully processed message in thread {thread.id}")
         return answer

@@ -88,7 +88,9 @@ async def create_payment_button(username: str, bot_username: str):
     )
 
 
-async def mini_report_handler(db_manager, general_agent, username, bot_username):
+async def mini_report_handler(
+    db_manager, general_agent, username, bot_username, user_message_time
+):
     logger.info(f"Generating mini report for user {username}")
     # Get raw responses
     raw_responses = db_manager.get_all_user_responses(username)
@@ -115,7 +117,13 @@ async def mini_report_handler(db_manager, general_agent, username, bot_username)
     payment_button = await create_payment_button(username, bot_username)
 
     return (
-        get_report_text(english_level, mistake_count, problem_areas, months_to_fix),
+        get_report_text(
+            english_level,
+            mistake_count,
+            problem_areas,
+            months_to_fix,
+            user_message_time,
+        ),
         payment_button,
     )
 
@@ -126,9 +134,10 @@ def process_assistant_response(response):
     eval_end = response.find("</evaluation>")
     feedback_start = response.find("<feedback>") + len("<feedback>")
     feedback_end = response.find("</feedback>")
-
+    logger.debug(f"Eval start: {eval_start}, eval end: {eval_end}")
     evaluation = json.loads(response[eval_start:eval_end])
     feedback = json.loads(response[feedback_start:feedback_end])
+    logger.debug(f"Evaluation: {evaluation}, Feedback: {feedback}")
     return evaluation, feedback
 
 
@@ -296,9 +305,10 @@ async def full_report_handler(
         audio_model_genai,
         study_plan_assistant_manager,
     )
-
+    logger.debug(f"Analysis data: {analysis_data}")
     # Generate PDF content
     pdf_path = generate_pdf_content(analysis_data)
+    logger.debug(f"PDF path1: {pdf_path}")
     return pdf_path
 
 
@@ -320,6 +330,7 @@ async def generate_full_report(
             assistants["audio_model_genai"],
             assistants["study_plan_assistant_manager"],
         )
+        logger.debug(f"PDF path2: {pdf_path}")
 
         # Send the PDF report
         await message.answer_document(
@@ -412,6 +423,8 @@ def setup_router(
             mini_report_assistant_manager,
             message.from_user.username,
             bot_username,
+            message,
+            message.date.timestamp(),
         )
 
         await message.answer(report_text, reply_markup=payment_button)
@@ -568,11 +581,29 @@ def setup_router(
     ):
         if not message.text or not message.text.startswith("/"):
             # Check if user has already paid
-            has_paid = db_manager.get_payment_status(username)
+            has_paid = db_manager.check_payment_status(username)
             if has_paid:
-                await message.answer(
-                    "Вы уже приобрели полный отчет. Если вам нужна помощь, напишите в поддержку @akhatsuleimenov."
-                )
+                # Check if user has received their report
+                has_received_report = db_manager.check_report_sent(username)
+                if has_received_report:
+                    await message.answer(
+                        "Вы уже приобрели полный отчет. Если вам нужна помощь, напишите в поддержку @akhatsuleimenov."
+                    )
+                else:
+                    await message.answer(
+                        "Вы уже оплатили отчет. Сейчас я его сгенерирую для вас."
+                    )
+                    await generate_full_report(
+                        message,
+                        username,
+                        db_manager,
+                        vocabulary_assistant_manager=vocabulary_assistant_manager,
+                        tense_assistant_manager=tense_assistant_manager,
+                        style_assistant_manager=style_assistant_manager,
+                        grammar_assistant_manager=grammar_assistant_manager,
+                        audio_model_genai=audio_model_genai,
+                        study_plan_assistant_manager=study_plan_assistant_manager,
+                    )
             else:
                 payment_button = await create_payment_button(username, bot_username)
                 await message.answer(

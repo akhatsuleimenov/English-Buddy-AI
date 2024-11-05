@@ -87,9 +87,11 @@ AUDIO_QUESTIONS = [
 ]
 
 
-def get_report_text(english_level, mistake_count, problem_areas, months_to_fix):
-    # Get current time and add 15 minutes
-    current_time = datetime.now()
+def get_report_text(
+    english_level, mistake_count, problem_areas, months_to_fix, user_message_time
+):
+    # Convert Unix timestamp to datetime and add 15 minutes
+    current_time = datetime.fromtimestamp(user_message_time)
     expiry_time = current_time + timedelta(minutes=15)
     formatted_time = expiry_time.strftime("%H:%M")
     return (

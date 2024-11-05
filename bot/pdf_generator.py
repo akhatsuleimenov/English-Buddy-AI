@@ -162,93 +162,84 @@ def generate_pdf_content(analysis_data):
     logger.debug(f"Sections: {sections}")
     for title, evaluation, feedback in sections:
         add_analysis_section(story, title, evaluation, feedback, styles)
-
+    logger.debug("PDF build")
     doc.build(story)
-
+    logger.debug("PDF build end")
     return pdf_path
 
 
 def add_analysis_section(story, title, evaluation, feedback, styles):
-    """Adds a section of analysis to the PDF report.
-
-    Args:
-        story: The PDF story object to append content to
-        title: Section title
-        evaluation: Dictionary containing evaluation scores and details
-        feedback: Dictionary containing detailed feedback sections
-        styles: Dictionary of PDF styles
-    """
+    """Adds a section of analysis to the PDF report."""
+    logger.debug(f"Title: {title}")
     story.append(Paragraph(title, styles["Heading2"]))
     story.append(Spacer(1, 12))
 
-    # Add evaluation scores
+    # Helper function to safely create bullet lists
+    def create_bullet_list(items, styles):
+        if not items or not isinstance(items, (list, tuple)) or len(items) == 0:
+            return None
+        return ListFlowable(
+            [ListItem(Paragraph(str(item), styles["Normal"])) for item in items],
+            bulletType="bullet",
+            leftIndent=20,
+            spaceBefore=6,
+            spaceAfter=6,
+        )
+
+    # Add evaluation scores (with null checks)
+    evaluation = evaluation or {}
     for criteria, details in evaluation.items():
-        if criteria != "overall":
+        if criteria != "overall" and details and isinstance(details, dict):
             story.append(
                 Paragraph(f"{criteria.replace('_', ' ').title()}", styles["Heading3"])
             )
-            story.append(
-                Paragraph(
-                    f"Оценка: {details['score']}/{details['max_score']}",
-                    styles["Normal"],
-                )
-            )
-            story.append(
-                Paragraph(f"Анализ: {details['justification']}", styles["Normal"])
-            )
+            score = details.get("score", 0)
+            max_score = details.get("max_score", 100)
+            justification = details.get("justification", "No justification provided")
+
+            story.append(Paragraph(f"Оценка: {score}/{max_score}", styles["Normal"]))
+            story.append(Paragraph(f"Анализ: {justification}", styles["Normal"]))
             story.append(Spacer(1, 12))
 
-    # Add overall evaluation
-    if "overall" in evaluation:
-        overall = evaluation["overall"]
+    # Add overall evaluation (with null checks)
+    overall = evaluation.get("overall", {})
+    if overall and isinstance(overall, dict):
         story.append(Paragraph("Общая оценка", styles["Heading3"]))
-        story.append(
-            Paragraph(
-                f"Общий балл: {overall['score']}/{overall['max_score']}",
-                styles["Normal"],
-            )
-        )
+        score = overall.get("score", 0)
+        max_score = overall.get("max_score", 100)
+        story.append(Paragraph(f"Общий балл: {score}/{max_score}", styles["Normal"]))
         story.append(Spacer(1, 8))
 
-        if overall["strengths"]:
+        # Handle strengths
+        strengths = overall.get("strengths", [])
+        if strengths and isinstance(strengths, (list, tuple)) and len(strengths) > 0:
             story.append(Paragraph("Сильные стороны:", styles["Heading4"]))
-            bullet_list = ListFlowable(
-                [
-                    ListItem(Paragraph(item, styles["Normal"]))
-                    for item in overall["strengths"]
-                ],
-                bulletType="bullet",
-                leftIndent=20,
-                spaceBefore=6,
-                spaceAfter=6,
-            )
-            story.append(bullet_list)
-            story.append(Spacer(1, 8))
+            bullet_list = create_bullet_list(strengths, styles)
+            if bullet_list:
+                story.append(bullet_list)
+                story.append(Spacer(1, 8))
 
-        if overall["areas_for_improvement"]:
+        # Handle areas for improvement
+        areas = overall.get("areas_for_improvement", [])
+        if areas and isinstance(areas, (list, tuple)) and len(areas) > 0:
             story.append(Paragraph("Области для улучшения:", styles["Heading4"]))
-            bullet_list = ListFlowable(
-                [
-                    ListItem(Paragraph(item, styles["Normal"]))
-                    for item in overall["areas_for_improvement"]
-                ],
-                bulletType="bullet",
-                leftIndent=20,
-                spaceBefore=6,
-                spaceAfter=6,
-            )
-            story.append(bullet_list)
-            story.append(Spacer(1, 8))
+            bullet_list = create_bullet_list(areas, styles)
+            if bullet_list:
+                story.append(bullet_list)
+                story.append(Spacer(1, 8))
 
-        if overall["summary"]:
+        # Handle summary
+        summary = overall.get("summary")
+        if summary and isinstance(summary, str) and summary.strip():
             story.append(Paragraph("Итог:", styles["Heading4"]))
-            story.append(Paragraph(overall["summary"], styles["Normal"]))
+            story.append(Paragraph(str(summary), styles["Normal"]))
             story.append(Spacer(1, 12))
 
-    # Add feedback sections with improved spacing
+    # Add feedback sections (with null checks)
     story.append(Paragraph(f"Детальный анализ {title.lower()}", styles["Heading3"]))
     story.append(Spacer(1, 8))
 
+    feedback = feedback or {}
     sections = [
         ("Примеры сильных сторон:", "Specific examples that demonstrate strong skills"),
         ("Области для улучшения:", "Areas where improvement is needed"),
@@ -257,19 +248,13 @@ def add_analysis_section(story, title, evaluation, feedback, styles):
     ]
 
     for section_title, section_key in sections:
-        story.append(Paragraph(section_title, styles["Heading4"]))
-        bullet_list = ListFlowable(
-            [
-                ListItem(Paragraph(item, styles["Normal"]))
-                for item in feedback[section_key]
-            ],
-            bulletType="bullet",
-            leftIndent=20,
-            spaceBefore=6,
-            spaceAfter=6,
-        )
-        story.append(bullet_list)
-        story.append(Spacer(1, 8))
+        items = feedback.get(section_key, [])
+        if items and isinstance(items, (list, tuple)) and len(items) > 0:
+            story.append(Paragraph(section_title, styles["Heading4"]))
+            bullet_list = create_bullet_list(items, styles)
+            if bullet_list:
+                story.append(bullet_list)
+                story.append(Spacer(1, 8))
 
     story.append(Spacer(1, 20))
     story.append(PageBreak())
