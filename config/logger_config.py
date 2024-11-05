@@ -35,12 +35,20 @@ def setup_logging():
     error_handler.setFormatter(error_formatter)
     error_handler.addFilter(lambda record: record.levelno >= logging.ERROR)
 
+    warning_handler = logging.StreamHandler(sys.stdout)
+    warning_handler.setLevel(logging.WARNING)
+    warning_formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+    )
+    warning_handler.setFormatter(warning_formatter)
+    warning_handler.addFilter(lambda record: record.levelno >= logging.WARNING)
+
     # Attach handlers to logger if not already present
     if not logger.handlers:
         logger.addHandler(debug_handler)
         logger.addHandler(info_handler)
         logger.addHandler(error_handler)
-
+        logger.addHandler(warning_handler)
     return logger
 
 

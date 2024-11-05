@@ -137,15 +137,6 @@ class DatabaseManager:
             )
             return [row[0] for row in cursor.fetchall()]
 
-    def mark_report_sent(self, username):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO user_reports (username) VALUES (?)", (username,)
-            )
-            conn.commit()
-            logger.info(f"Report marked as sent for user {username}")
-
     def save_user_info(self, username, question_number, info):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -175,18 +166,6 @@ class DatabaseManager:
                 return None
 
             return [info for _, info in results]
-
-    def save_report_text(self, username, report_type, report_text):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO user_reports (username, report_type, report_text) VALUES (?, ?, ?)",
-                (username, report_type, report_text),
-            )
-            conn.commit()
-            logger.info(
-                f"Report text saved for user {username}, report type {report_type}"
-            )
 
     def check_report_sent(self, username):
         with self.get_connection() as conn:

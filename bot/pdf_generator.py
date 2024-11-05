@@ -4,21 +4,29 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import (ListFlowable, ListItem, PageBreak, Paragraph,
-                                SimpleDocTemplate, Spacer)
+from reportlab.platypus import (
+    ListFlowable,
+    ListItem,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+)
 
 from config.logger_config import logger
 
 logger = logger.getChild("pdf_generator")
 
 
-def generate_pdf_content(analysis_data, pdf_path):
+def generate_pdf_content(analysis_data):
     """Generate PDF report content from analysis data.
 
     Args:
         analysis_data (dict): Dictionary containing user analysis data
         pdf_path (str): Path where PDF should be saved
     """
+    os.makedirs("reports", exist_ok=True)
+    pdf_path = f"reports/{analysis_data['user_info']['username']}_full_report.pdf"
     doc = SimpleDocTemplate(
         pdf_path,
         pagesize=letter,
@@ -44,6 +52,7 @@ def generate_pdf_content(analysis_data, pdf_path):
     styles["Heading1"].fontName = "DejaVuSans-Bold"
     styles["Heading2"].fontName = "DejaVuSans-Bold"
     styles["Heading3"].fontName = "DejaVuSans-Bold"
+    styles["Heading4"].fontName = "DejaVuSans-Bold"
     styles["Normal"].fontName = "DejaVuSans"
     styles["Bullet"].fontName = "DejavuSans"
 
@@ -99,7 +108,6 @@ def generate_pdf_content(analysis_data, pdf_path):
         story.append(PageBreak())
 
     # Action Schedule
-    story.append(PageBreak())
     story.append(Paragraph("График Занятий", styles["Title"]))
 
     schedules = {
@@ -157,6 +165,8 @@ def generate_pdf_content(analysis_data, pdf_path):
 
     doc.build(story)
 
+    return pdf_path
+
 
 def add_analysis_section(story, title, evaluation, feedback, styles):
     """Adds a section of analysis to the PDF report.
@@ -177,7 +187,12 @@ def add_analysis_section(story, title, evaluation, feedback, styles):
             story.append(
                 Paragraph(f"{criteria.replace('_', ' ').title()}", styles["Heading3"])
             )
-            story.append(Paragraph(f"Оценка: {details['score']}/10", styles["Normal"]))
+            story.append(
+                Paragraph(
+                    f"Оценка: {details['score']}/{details['max_score']}",
+                    styles["Normal"],
+                )
+            )
             story.append(
                 Paragraph(f"Анализ: {details['justification']}", styles["Normal"])
             )
@@ -187,7 +202,12 @@ def add_analysis_section(story, title, evaluation, feedback, styles):
     if "overall" in evaluation:
         overall = evaluation["overall"]
         story.append(Paragraph("Общая оценка", styles["Heading3"]))
-        story.append(Paragraph(f"Общий балл: {overall['score']}/10", styles["Normal"]))
+        story.append(
+            Paragraph(
+                f"Общий балл: {overall['score']}/{overall['max_score']}",
+                styles["Normal"],
+            )
+        )
         story.append(Spacer(1, 8))
 
         if overall["strengths"]:
@@ -252,3 +272,4 @@ def add_analysis_section(story, title, evaluation, feedback, styles):
         story.append(Spacer(1, 8))
 
     story.append(Spacer(1, 20))
+    story.append(PageBreak())

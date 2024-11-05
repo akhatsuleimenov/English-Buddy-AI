@@ -25,23 +25,51 @@ class AssistantManager:
         )
 
     def create_run(self, thread_id):
-        run = self.client.beta.threads.runs.create(
-            thread_id=thread_id, assistant_id=self.assistant.id
-        )
-        logger.info(f"Started run in thread {thread_id}")
+        max_retries = 3
+        attempt = 0
 
-        while run.status == "queued" or run.status == "in_progress":
-            time.sleep(1)
-            run = self.client.beta.threads.runs.retrieve(
-                thread_id=thread_id, run_id=run.id
-            )
+        while attempt < max_retries:
+            try:
+                run = self.client.beta.threads.runs.create(
+                    thread_id=thread_id, assistant_id=self.assistant.id
+                )
+                logger.info(f"Started run in thread {thread_id}")
 
-        if run.status == "failed":
-            error_msg = f"Run failed in thread {thread_id}: {run.last_error.message}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
+                while run.status == "queued" or run.status == "in_progress":
+                    time.sleep(1)
+                    run = self.client.beta.threads.runs.retrieve(
+                        thread_id=thread_id, run_id=run.id
+                    )
+                    logger.debug(f"Run status: {run.status}")
 
-        logger.info(f"Completed run in thread {thread_id} with status: {run.status}")
+                if run.status == "failed":
+                    attempt += 1
+                    error_msg = (
+                        f"Run failed in thread {thread_id}: {run.last_error.message}"
+                    )
+                    logger.warning(f"Attempt {attempt}/{max_retries}: {error_msg}")
+                    if attempt >= max_retries:
+                        logger.error(
+                            f"All retry attempts failed for thread {thread_id}"
+                        )
+                        raise Exception(error_msg)
+                    time.sleep(2**attempt)  # Exponential backoff
+                    continue
+
+                logger.info(
+                    f"Completed run in thread {thread_id} with status: {run.status}"
+                )
+                return  # Success - exit the retry loop
+
+            except Exception as e:
+                attempt += 1
+                logger.warning(
+                    f"Attempt {attempt}/{max_retries}: Error creating run: {str(e)}"
+                )
+                if attempt >= max_retries:
+                    logger.error(f"All retry attempts failed for thread {thread_id}")
+                    raise
+                time.sleep(2**attempt)  # Exponential backoff
 
     def get_answer(self, thread_id):
         resp = self.client.beta.threads.messages.list(thread_id=thread_id)
