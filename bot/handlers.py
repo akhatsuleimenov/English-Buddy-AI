@@ -41,7 +41,6 @@ from bot.validators import (
     validate_voice_message,
 )
 from config.logger_config import logger
-from test_data import agent_data
 
 # Configure structured logging
 logger = logger.getChild("handlers")
